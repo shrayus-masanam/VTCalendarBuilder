@@ -13,10 +13,7 @@
 		"default_title": "Build Calendar"
 	},
 	"icons": {
-		"16": "img/csbl_16.png",
-		"32": "img/csbl_32.png",
-		"48": "img/csbl_48.png",
-		"128": "img/csbl_128.png"
+		"48": "img/calendar_48.png"
 	},
 	"manifest_version": 3
 }
