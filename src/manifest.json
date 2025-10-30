@@ -1,7 +1,7 @@
 {
 	"name": "VT Calendar Builder",
 	"version": "1.0.1",
-	"description": "",
+	"description": "Automatically generates an ICS file of your class schedule ",
 	"permissions": [
 		"activeTab",
 		"scripting"
