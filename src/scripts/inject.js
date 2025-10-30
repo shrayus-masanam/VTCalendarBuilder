@@ -1,5 +1,24 @@
-(async () => {
-if (location.hostname != "vt.navigate.eab.com") return;
+// https://stackoverflow.com/a/2117523
+function uuidv4() {
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
+        (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
+    );
+}
+// https://stackoverflow.com/a/8831937
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0, len = str.length; i < len; i++) {
+        let chr = str.charCodeAt(i);
+        hash = (hash << 5) - hash + chr;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return hash;
+}
+
+const hostname = "vt.navigate.eab.com";
+
+(async () => {try{
+if (location.hostname != hostname) return window.open("https://" + hostname);
 
 let req = await fetch("https://vt.navigate.eab.com/api/v1/reg/dashboard/courses/");
 let res = await req.json();
@@ -92,14 +111,12 @@ function meetingDaysToString(meetingDays) {
 
 // we need this because the local date returned by
 // navigate will be behind by 1 if we just feed it into UTC.
-// TODO: probably generalize this to work with any tz
-// and make it better than a string manipulation hack
 function estDate(dateString) {
-    let components = dateString.split('-');
-    let year = parseInt(components[0]);
-    let month = parseInt(components[1]);
-    let day = parseInt(components[2]);
-    return new Date(Date.UTC(year, month - 1, day) + 5 * 60 * 60 * 1000); // daylight savings might mess with this but we really just need the day to be right
+    const tempdate = Temporal.PlainDate.from(dateString).toZonedDateTime({
+        timeZone: 'America/New_York',
+        plainTime: '00:00'
+    });
+    return new Date(tempdate.epochMilliseconds);
 }
 
 // adapted from https://stackoverflow.com/a/9640384
@@ -110,14 +127,17 @@ function toSeconds(hms) {
     return seconds;
 }
 
-function meetingsEqual(A, B) {
-    return A != null && B != null && A.start == B.start && A.end == B.end && A.location == B.location;
+function addSeconds(date, secondsString) {
+    // not worrying about overflow hopefully
+    const seconds = Number(secondsString);
+    if (!Number.isFinite(seconds)) return null;
+    return new Date(date.getTime() + seconds * 1000);
 }
-async function meetingHash(meeting) {
+
+function meetingHash(meeting) {
     if (meeting == null) return null;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(toSeconds(message.start) + toSeconds(message.end) + meeting.location);
-    const hash = await window.crypto.subtle.digest("SHA-256", data);
+    const data = ("" + toSeconds(meeting.start) + "$$" + toSeconds(meeting.end) + "$$" + meeting.location).replaceAll(" ", "");
+    const hash = hashCode(data);
     return hash;
 }
 
@@ -150,14 +170,15 @@ END:VTIMEZONE
         // this current impl is wrong
         let similarMeetings = {};
         for (const [day, meetings] of Object.entries(course.days)) {
-            meetings.forEach(async (meeting) => {
-                if (similarMeetings[meetingHash(meeting)] == null) {
-                    similarMeetings[meetingHash(meeting)] = {
+            meetings.forEach(meeting => {
+                let meetingHashString = meetingHash(meeting);
+                if (similarMeetings[meetingHashString] == null) {
+                    similarMeetings[meetingHashString] = {
                         days: [day],
                         info: meeting
                     }
                 } else
-                    similarMeetings[meetingHash(meeting)].days.push(day);
+                    similarMeetings[meetingHashString].days.push(day);
             })
         }
 
@@ -166,22 +187,22 @@ END:VTIMEZONE
             let semesterStart = estDate(course.start);
             let semesterEnd = estDate(course.end);
             let meetingDays = meeting.days;
-            let startTime = semesterStart + toSeconds(meeting.start);
-            let endTime = semesterStart + toSeconds(meeting.end);
+            let startTime = addSeconds(semesterStart, toSeconds(meeting.info.start));
+            let endTime = addSeconds(semesterStart, toSeconds(meeting.info.end));
             ics += `BEGIN:VEVENT
 CLASS:PUBLIC
 CREATED:${YYYYMMDDTHHMMSSZ(now)}
-DTEND;TZID="Eastern Standard Time":${YYYYMMDDTHHMMSS(now)}
+DTEND;TZID="Eastern Standard Time":${YYYYMMDDTHHMMSS(endTime)}
 DTSTAMP:${YYYYMMDDTHHMMSSZ(now)}
-DTSTART;TZID="Eastern Standard Time":${YYYYMMDDTHHMMSS(now)}
+DTSTART;TZID="Eastern Standard Time":${YYYYMMDDTHHMMSS(startTime)}
 LAST-MODIFIED:${YYYYMMDDTHHMMSSZ(now)}
-LOCATION:${course.location}
+LOCATION:${meeting.info.location}
 PRIORITY:5
-RRULE:FREQ=WEEKLY;COUNT=${numMeetings(start, end, meetingDays)};BYDAY=${meetingDaysToString(meetingDays)}
+RRULE:FREQ=WEEKLY;COUNT=${numMeetings(semesterStart, semesterEnd, meetingDays)};BYDAY=${meetingDaysToString(meetingDays)}
 SEQUENCE:0
 SUMMARY;LANGUAGE=en-us:${course.code}
 TRANSP:OPAQUE
-UID:${crypto.randomUUID()}
+UID:${uuidv4()}
 X-ALT-DESC;FMTTYPE=text/html:${course.name + " with " + course.instructor}
 X-MICROSOFT-CDO-BUSYSTATUS:BUSY
 X-MICROSOFT-CDO-IMPORTANCE:1
@@ -204,4 +225,4 @@ END:VEVENT
 console.log(courses);
 console.log(buildICS(courses));
 
-})();
+}catch(e){alert("An error ocurred:\n\n"+e)}})();
