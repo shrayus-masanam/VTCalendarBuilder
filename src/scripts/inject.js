@@ -2,30 +2,33 @@
 const hostname = "vt.navigate.eab.com";
 if (location.hostname != hostname) return window.open("https://" + hostname);
 
+// get the schedule from navigate
 let req = await fetch(`https://${hostname}/api/v1/reg/dashboard/courses/`);
 if (!req.ok)
     return alert("Failed to fetch schedule. Are you logged in?");
 let res = await req.json();
+
 let courses = {};
+
 // iterate the meeting times
 Object.values(res.section_time).forEach(sectionTime => {
-    // first create the course object
+    // first create the course object structure
     let crn = sectionTime.section;
     if (courses[crn] == null) {
-        // info shown in the calendar
+        // fill it with info
         courses[crn] = {
             name: res.section[crn].title,
             code: res.course[res.section[crn].course].cd,
             instructor: res.section[crn].instructor_name,
             start: res.section[crn].class_start_dt,
             end: res.section[crn].class_end_dt,
-            days: {} // 1-7: [{start:x, end:x, location:x}, ...]
+            days: {} // keys are 1-7: [{start:x, end:x, location:x}, ...]
         };
     }
     // now gathering the meeting times for the course
     let day = sectionTime.day_of_week;
     if (courses[crn].days[day] == null)
-        // holding an array in case some class meets multiple times a day
+        // array datatype in case some classes meet multiple times a day
         courses[crn].days[day] = [];
     courses[crn].days[day].push({
         start: sectionTime.from_tm,
@@ -69,7 +72,6 @@ function download(filename, text) {
 function pad2(n) { // always returns a string
     return (n < 10 ? '0' : '') + n;
 }
-
 function YYYYMMDDTHHMMSS(date) {
     return date.getFullYear() +
         pad2(date.getMonth() + 1) +
@@ -79,8 +81,7 @@ function YYYYMMDDTHHMMSS(date) {
         pad2(date.getMinutes()) +
         pad2(date.getSeconds());
 }
-
-function YYYYMMDDTHHMMSSZ(date) {
+function YYYYMMDDTHHMMSSZ(date) { // UTC version
     return date.getUTCFullYear() +
         pad2(date.getUTCMonth() + 1) +
         pad2(date.getUTCDate()) +
@@ -113,7 +114,6 @@ let dayAbbrvs = {
     6: "FR",
     7: "SA"
 }
-
 function meetingDaysToString(meetingDays) {
     let ret = "";
     meetingDays.forEach(day => {
@@ -179,29 +179,31 @@ END:DAYLIGHT
 END:VTIMEZONE
 `;
     Object.values(courses).forEach(course => {
-        // TODO: rewrite this because i forgot about multiple classes in a day.
-        // loop through all meeting times for the course, group by alike start/ending times and locations
-        // then create a VEVENT for all of those groups.
-        // this current impl is wrong
+        // group meeting times that are similar.
+        // "similar" means that they have the same start, end, and location
+        // the reason this needs to be done is because some classes meet
+        // at different times or locations. different VEVENTs need to be
+        // created for each of these since they're not the same recurring event
         let similarMeetings = {};
         for (const [day, meetings] of Object.entries(course.days)) {
             meetings.forEach(meeting => {
                 let meetingHashString = meetingHash(meeting);
                 if (similarMeetings[meetingHashString] == null) {
                     similarMeetings[meetingHashString] = {
-                        days: [day],
+                        days: [day], // store each day the meeting happens
                         info: meeting
                     }
                 } else
                     similarMeetings[meetingHashString].days.push(day);
             })
         }
-
+        // now we create VEVENTs for each group of meetings
         Object.values(similarMeetings).forEach(meeting => {
             let now = new Date();
             let semesterStart = estDate(course.start);
             let semesterEnd = estDate(course.end);
             let meetingDays = meeting.days;
+            // add the number of seconds since midnight to get the start/end times
             let startTime = addSeconds(semesterStart, toSeconds(meeting.info.start));
             let endTime = addSeconds(semesterStart, toSeconds(meeting.info.end));
             ics += `BEGIN:VEVENT
@@ -230,7 +232,6 @@ END:VALARM
 END:VEVENT
 `;
         });
-
     });
 
 
