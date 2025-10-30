@@ -1,26 +1,10 @@
-// https://stackoverflow.com/a/2117523
-function uuidv4() {
-    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
-        (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
-    );
-}
-// https://stackoverflow.com/a/8831937
-function hashCode(str) {
-    let hash = 0;
-    for (let i = 0, len = str.length; i < len; i++) {
-        let chr = str.charCodeAt(i);
-        hash = (hash << 5) - hash + chr;
-        hash |= 0; // Convert to 32bit integer
-    }
-    return hash;
-}
-
-const hostname = "vt.navigate.eab.com";
-
 (async () => {try{
+const hostname = "vt.navigate.eab.com";
 if (location.hostname != hostname) return window.open("https://" + hostname);
 
 let req = await fetch("https://vt.navigate.eab.com/api/v1/reg/dashboard/courses/");
+if (!req.ok)
+    return alert("Failed to fetch schedule. Are you logged in?");
 let res = await req.json();
 let courses = {};
 // iterate the meeting times
@@ -49,6 +33,37 @@ Object.values(res.section_time).forEach(sectionTime => {
         location: res.location[sectionTime.location].name // building abbreviation
     });
 });
+
+// from https://stackoverflow.com/a/2117523
+function uuidv4() {
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
+        (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
+    );
+}
+// from https://stackoverflow.com/a/8831937
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0, len = str.length; i < len; i++) {
+        let chr = str.charCodeAt(i);
+        hash = (hash << 5) - hash + chr;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return hash;
+}
+
+// from https://stackoverflow.com/a/18197341
+function download(filename, text) {
+    var element = document.createElement('a');
+    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+    element.setAttribute('download', filename);
+
+    element.style.display = 'none';
+    document.body.appendChild(element);
+
+    element.click();
+
+    document.body.removeChild(element);
+}
 
 // adapted from https://jsfiddle.net/felipekm/MYpQ9/
 function pad2(n) { // always returns a string
@@ -222,7 +237,8 @@ END:VEVENT
     return ics + "END:VCALENDAR";
 }
 
-console.log(courses);
-console.log(buildICS(courses));
+//console.log(courses);
+//console.log(buildICS(courses));
+download("schedule.ics", buildICS(courses));
 
 }catch(e){alert("An error ocurred:\n\n"+e)}})();
