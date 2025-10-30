@@ -1,6 +1,9 @@
-var req = await fetch("https://vt.navigate.eab.com/api/v1/reg/dashboard/courses/");
-var res = await req.json();
-var courses = {};
+(async () => {
+if (location.hostname != "vt.navigate.eab.com") return;
+
+let req = await fetch("https://vt.navigate.eab.com/api/v1/reg/dashboard/courses/");
+let res = await req.json();
+let courses = {};
 // iterate the meeting times
 Object.values(res.section_time).forEach(sectionTime => {
     // first create the course object
@@ -32,6 +35,7 @@ Object.values(res.section_time).forEach(sectionTime => {
 function pad2(n) { // always returns a string
     return (n < 10 ? '0' : '') + n;
 }
+
 function YYYYMMDDTHHMMSS(date) {
     return date.getFullYear() +
         pad2(date.getMonth() + 1) +
@@ -41,6 +45,7 @@ function YYYYMMDDTHHMMSS(date) {
         pad2(date.getMinutes()) +
         pad2(date.getSeconds());
 }
+
 function YYYYMMDDTHHMMSSZ(date) {
     return date.getUTCFullYear() +
         pad2(date.getUTCMonth() + 1) +
@@ -66,8 +71,15 @@ function numMeetings(startDate, endDate, meetingDays) {
 }
 
 let dayAbbrvs = {
-    1: "SU", 2: "MO", 3: "TU", 4: "WE", 5: "TH", 6: "FR", 7: "SA"
+    1: "SU",
+    2: "MO",
+    3: "TU",
+    4: "WE",
+    5: "TH",
+    6: "FR",
+    7: "SA"
 }
+
 function meetingDaysToString(meetingDays) {
     let ret = "";
     meetingDays.forEach(day => {
@@ -92,9 +104,9 @@ function estDate(dateString) {
 
 // adapted from https://stackoverflow.com/a/9640384
 function toSeconds(hms) {
-    var a = hms.split(':'); // split it at the colons
+    let a = hms.split(':'); // split it at the colons
     // minutes are worth 60 seconds. Hours are worth 60 minutes.
-    var seconds = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]);
+    let seconds = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]);
     return seconds;
 }
 
@@ -136,14 +148,14 @@ END:VTIMEZONE
         // loop through all meeting times for the course, group by alike start/ending times and locations
         // then create a VEVENT for all of those groups.
         // this current impl is wrong
-        let similarMeetings = { };
+        let similarMeetings = {};
         for (const [day, meetings] of Object.entries(course.days)) {
             meetings.forEach(async (meeting) => {
                 if (similarMeetings[meetingHash(meeting)] == null) {
-                        similarMeetings[meetingHash(meeting)] = {
-                            days: [day],
-                            info: meeting
-                        }
+                    similarMeetings[meetingHash(meeting)] = {
+                        days: [day],
+                        info: meeting
+                    }
                 } else
                     similarMeetings[meetingHash(meeting)].days.push(day);
             })
@@ -184,10 +196,12 @@ END:VEVENT
         });
 
     });
-    
+
 
     return ics + "END:VCALENDAR";
 }
 
 console.log(courses);
 console.log(buildICS(courses));
+
+})();
