@@ -2,7 +2,7 @@
 const hostname = "vt.navigate.eab.com";
 if (location.hostname != hostname) return window.open("https://" + hostname);
 
-let req = await fetch("https://vt.navigate.eab.com/api/v1/reg/dashboard/courses/");
+let req = await fetch(`https:/${hostname}/api/v1/reg/dashboard/courses/`);
 if (!req.ok)
     return alert("Failed to fetch schedule. Are you logged in?");
 let res = await req.json();
