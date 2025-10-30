@@ -13,7 +13,7 @@ Object.values(res.section_time).forEach(sectionTime => {
             instructor: res.section[crn].instructor_name,
             start: res.section[crn].class_start_dt,
             end: res.section[crn].class_end_dt,
-            days: {}
+            days: {} // 1-7: [{start:x, end:x, location:x}, ...]
         };
     }
     // now gathering the meeting times for the course
@@ -90,6 +90,25 @@ function estDate(dateString) {
     return new Date(Date.UTC(year, month - 1, day) + 5 * 60 * 60 * 1000); // daylight savings might mess with this but we really just need the day to be right
 }
 
+// adapted from https://stackoverflow.com/a/9640384
+function toSeconds(hms) {
+    var a = hms.split(':'); // split it at the colons
+    // minutes are worth 60 seconds. Hours are worth 60 minutes.
+    var seconds = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]);
+    return seconds;
+}
+
+function meetingsEqual(A, B) {
+    return A != null && B != null && A.start == B.start && A.end == B.end && A.location == B.location;
+}
+async function meetingHash(meeting) {
+    if (meeting == null) return null;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(toSeconds(message.start) + toSeconds(message.end) + meeting.location);
+    const hash = await window.crypto.subtle.digest("SHA-256", data);
+    return hash;
+}
+
 function buildICS(courses) {
     let ics = `BEGIN:VCALENDAR
 PRODID:-//Microsoft Corporation//Outlook 16.0 MIMEDIR//EN
@@ -114,14 +133,30 @@ END:VTIMEZONE
 `;
     Object.values(courses).forEach(course => {
         // TODO: rewrite this because i forgot about multiple classes in a day.
-        // loop through all meeting times for the course, group by alike start/ending times
+        // loop through all meeting times for the course, group by alike start/ending times and locations
         // then create a VEVENT for all of those groups.
         // this current impl is wrong
-        let now = new Date();
-        let start = estDate(course.start);
-        let end = estDate(course.end);
-        let meetingDays = Object.keys(course.days);
-        ics += `BEGIN:VEVENT
+        let similarMeetings = { };
+        for (const [day, meetings] of Object.entries(course.days)) {
+            meetings.forEach(async (meeting) => {
+                if (similarMeetings[meetingHash(meeting)] == null) {
+                        similarMeetings[meetingHash(meeting)] = {
+                            days: [day],
+                            info: meeting
+                        }
+                } else
+                    similarMeetings[meetingHash(meeting)].days.push(day);
+            })
+        }
+
+        Object.values(similarMeetings).forEach(meeting => {
+            let now = new Date();
+            let semesterStart = estDate(course.start);
+            let semesterEnd = estDate(course.end);
+            let meetingDays = meeting.days;
+            let startTime = semesterStart + toSeconds(meeting.start);
+            let endTime = semesterStart + toSeconds(meeting.end);
+            ics += `BEGIN:VEVENT
 CLASS:PUBLIC
 CREATED:${YYYYMMDDTHHMMSSZ(now)}
 DTEND;TZID="Eastern Standard Time":${YYYYMMDDTHHMMSS(now)}
@@ -146,6 +181,8 @@ DESCRIPTION:Reminder
 END:VALARM
 END:VEVENT
 `;
+        });
+
     });
     
 
